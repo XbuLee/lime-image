@@ -6,6 +6,7 @@ class AppDelegate: FlutterAppDelegate {
   /// Flutter 端还没起来时先把待打开的文件缓存住
   private var pendingFiles: [String] = []
   private var channel: FlutterMethodChannel?
+  private var dartReady = false
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     if let controller = mainFlutterWindow?.contentViewController as? FlutterViewController {
@@ -14,6 +15,7 @@ class AppDelegate: FlutterAppDelegate {
         binaryMessenger: controller.engine.binaryMessenger)
       ch.setMethodCallHandler { [weak self] call, result in
         if call.method == "consumePendingFiles" {
+          self?.dartReady = true
           let files = self?.pendingFiles ?? []
           self?.pendingFiles = []
           result(files)
@@ -56,7 +58,7 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   private func flushPending() {
-    guard let channel = channel, !pendingFiles.isEmpty else { return }
+    guard dartReady, let channel = channel, !pendingFiles.isEmpty else { return }
     let files = pendingFiles
     pendingFiles = []
     channel.invokeMethod("openFiles", arguments: files)

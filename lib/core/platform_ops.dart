@@ -12,12 +12,26 @@ class PlatformOps {
   static const _channel = MethodChannel('limeimage/platform');
 
   /// macOS: Finder 双击、拖到 Dock 图标打开文件时由原生侧推送过来
+  static final List<List<String>> _pendingOpenFiles = [];
   static final StreamController<List<String>> _openFiles =
-      StreamController<List<String>>.broadcast();
+      StreamController<List<String>>.broadcast(
+        onListen: () {
+          for (final paths in _pendingOpenFiles) {
+            _openFiles.add(paths);
+          }
+          _pendingOpenFiles.clear();
+        },
+      );
   static Stream<List<String>> get openFileEvents => _openFiles.stream;
 
   static void emitOpenFiles(List<String> paths) {
-    if (paths.isNotEmpty) _openFiles.add(paths);
+    if (paths.isEmpty) return;
+    final files = List<String>.of(paths);
+    if (_openFiles.hasListener) {
+      _openFiles.add(files);
+    } else {
+      _pendingOpenFiles.add(files);
+    }
   }
 
   static void initChannel() {
@@ -28,15 +42,13 @@ class PlatformOps {
       }
       return null;
     });
-    // 启动早期原生侧缓存的待打开文件
-    if (Platform.isMacOS) {
-      _channel
-          .invokeMethod<List<Object?>>('consumePendingFiles')
-          .then((v) {
-            if (v != null) emitOpenFiles(v.cast<String>());
-          })
-          .catchError((_) => null);
-    }
+  }
+
+  /// 作为启动参数处理，优先于“恢复上次图片”；调用后原生侧才开始推送新事件。
+  static Future<List<String>> consumePendingFiles() async {
+    if (!Platform.isMacOS) return const [];
+    return await _channel.invokeListMethod<String>('consumePendingFiles') ??
+        const [];
   }
 
   // —— 输入法 ——

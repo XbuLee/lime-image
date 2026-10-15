@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../core/platform_ops.dart';
 import '../core/utils.dart';
 import '../models/app_action.dart';
 import '../models/enums.dart';
@@ -44,7 +43,6 @@ class _ViewerPageState extends State<ViewerPage>
   bool _dialogOpen = false;
   Timer? _titleTimer;
   Timer? _cursorTimer;
-  StreamSubscription<List<String>>? _openSub;
   final FocusNode _focus = FocusNode();
 
   @override
@@ -54,19 +52,12 @@ class _ViewerPageState extends State<ViewerPage>
     windowManager.addListener(this);
     // 全局键盘钩子：不依赖焦点，中文输入法开启时也能触发
     HardwareKeyboard.instance.addHandler(_handleGlobalKey);
-    _openSub = PlatformOps.openFileEvents.listen((paths) async {
-      if (paths.isEmpty) return;
-      await windowManager.show();
-      await windowManager.focus();
-      await s.open(paths.first);
-    });
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
     HardwareKeyboard.instance.removeHandler(_handleGlobalKey);
-    _openSub?.cancel();
     _titleTimer?.cancel();
     _cursorTimer?.cancel();
     _focus.dispose();

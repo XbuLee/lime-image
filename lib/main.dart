@@ -110,11 +110,25 @@ Future<void> main(List<String> args) async {
 
   // 首帧还在排版时就把解码跑起来（都是异步 IO，跟布局并行）。
   // 目标图会走 folder.seedSingle 的快路径，不等目录扫描。
-  void initializeViewer() {
-    state
-        .initialize(args)
-        .then((_) => _mark('first image ready'))
-        .catchError((Object e) => debugPrint('[lime image] 启动打开失败: $e'));
+  Future<void> initializeViewer() async {
+    try {
+      final files = await PlatformOps.consumePendingFiles();
+      await state.initialize([...files, ...args]);
+      _mark('first image ready');
+    } catch (e) {
+      debugPrint('[lime image] 启动打开失败: $e');
+    }
+    // 初始化（含恢复上次图片）完成后再接收新请求，避免互相覆盖。
+    // 选择语言或初始化期间收到的事件由 PlatformOps 缓存。
+    await for (final paths in PlatformOps.openFileEvents) {
+      try {
+        await windowManager.show();
+        await windowManager.focus();
+        await state.open(paths.first);
+      } catch (e) {
+        debugPrint('[lime image] 打开文件失败: $e');
+      }
+    }
   }
 
   if (cfg.language != null) {
