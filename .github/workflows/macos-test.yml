@@ -1,0 +1,41 @@
+name: macOS test build
+
+on:
+  push:
+    branches: [lwj/fix-macos-cold-start]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build macOS app
+        run: flutter build macos --release --build-name=0.0.0-macos-cold-start --build-number=${{ github.run_number }}
+      - name: Package app
+        run: |
+          APP="build/macos/Build/Products/Release/lime-image.app"
+          test -d "$APP"
+          codesign --force --deep --sign - "$APP"
+          mkdir -p dist staging
+          cp -R "$APP" staging/
+          ln -s /Applications staging/Applications
+          hdiutil create -volname "lime image test" -srcfolder staging \
+            -ov -format UDZO dist/lime-image-macos-cold-start.dmg
+          ditto -c -k --sequesterRsrc --keepParent "$APP" dist/lime-image-macos-cold-start.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lime-image-macos-cold-start
+          path: dist/*
+          if-no-files-found: error
